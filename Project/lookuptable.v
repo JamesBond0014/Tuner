@@ -1,7 +1,6 @@
 module lut(in, out);
 	input [2:0]in;
 	output reg [10:0] out;
-
 	always @(*)
 	begin
 		case(in)
