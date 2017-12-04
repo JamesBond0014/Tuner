@@ -90,7 +90,7 @@ module final2 (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK,
 	defparam VGA.BACKGROUND_IMAGE = "black.mif";
 	
 	// Draw graph
-	draw_graph d1(AUD_XCK, enable, reset, readdata_right, writeEn, X, Y);
+	draw_graph d1(CLOCK_50, AUD_XCK, enable, reset, readdata_right, writeEn, X, Y);
 	
 //	// Redirect sound input to output
 //	assign writedata_left = readdata_left;
@@ -100,26 +100,28 @@ module final2 (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK,
 	
 	// Test: display x and Y axis, also display inputted sound data
 	reg[3:0] test5,test4,test3,test2,test1,test0;
-	always @(posedge AUD_XCK)
+	always @(posedge CLOCK_50)
 	begin
-		if(~KEY[1])
-			begin
-				test5 <= readdata_right[23:20];
-				test4 <= readdata_right[19:16];
-				test3 <= readdata_right[15:12];
-				test2 <= readdata_right[11:8];
-				test1 <= readdata_right[7:4];
-				test0 <= readdata_right[3:0];
-			end
-		else if(~KEY[2])
+		if (AUD_XCK) begin
+			if(~KEY[1])
 				begin
-					test5 <= X[7:4];
-					test4 <= X[3:0];
-					test3 <= 4'b0000;
-					test2 <= 4'b0000;
-					test1 <= {1'b0,Y[6:4]};
-					test0 <= Y[3:0];
+					test5 <= readdata_right[23:20];
+					test4 <= readdata_right[19:16];
+					test3 <= readdata_right[15:12];
+					test2 <= readdata_right[11:8];
+					test1 <= readdata_right[7:4];
+					test0 <= readdata_right[3:0];
 				end
+			else if(~KEY[2])
+					begin
+						test5 <= X[7:4];
+						test4 <= X[3:0];
+						test3 <= 4'b0000;
+						test2 <= 4'b0000;
+						test1 <= {1'b0,Y[6:4]};
+						test0 <= Y[3:0];
+					end
+		end
 	end
 
 	hex_decoder h5 (test5,HEX5);
@@ -187,8 +189,8 @@ module final2 (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK,
 endmodule
 
 
-module draw_graph(clk, enable, reset, soundwave, enable_draw, X_Vga, Y_Vga);
-	input clk, enable, reset;
+module draw_graph(clk, audio_clock, enable, reset, soundwave, enable_draw, X_Vga, Y_Vga);
+	input clk, audio_clock, enable, reset;
 	input [23:0] soundwave;
 	output enable_draw;
 	output [7:0] X_Vga;
@@ -197,7 +199,7 @@ module draw_graph(clk, enable, reset, soundwave, enable_draw, X_Vga, Y_Vga);
 	// Rate divider: every 4 clock cycles
 	wire [15:0] load = 16'd1000;
 	wire [15:0] count;
-	countdown ct(enable, load, reset, clk, count);
+	countdown ct(clk, audio_clock, enable, load, reset, count);
 	
 	// Enable draw
 	wire enable_draw;
@@ -208,7 +210,7 @@ module draw_graph(clk, enable, reset, soundwave, enable_draw, X_Vga, Y_Vga);
 	always @(posedge clk) begin
 		if (reset)
 			x <= 8'd0;
-		else if (enable_draw) begin
+		else if (enable_draw && audio_clock) begin
 			if (x < 8'b11111110)
 				x <= x + 8'd1;
 		end
@@ -246,16 +248,16 @@ module simple_draw(soundwave,x,X_Vga,Y_Vga,colour);
 endmodule
 
 
-module countdown(enable, load, reset, clock, count_q);
+module countdown(clk, audio_clock, enable, load, reset, count_q);
 	// reset is posedge
-	input enable, reset, clock;
+	input clk, audio_clock, enable, reset;
 	input [15:0] load;
 	output reg [15:0] count_q;
 	
-	always @(posedge clock) begin
+	always @(posedge clk) begin
 		if (reset) // reset counter
 			count_q <= load;
-		else if (enable) // counter when enable is on
+		else if (enable && audio_clock) // counter when enable is on
 			begin
 			if (count_q == 16'd0) // counter reached 0
 				count_q <= load;

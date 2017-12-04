@@ -1,10 +1,10 @@
 // checks if a input is within a certain expected range.
 // x is +/- z within y, output 1 for true
-module range_comparator24(x,y,z,o);
-	input signed[23:0]x,y,z;
+module range_comparator16(x,y,z,o);
+	input signed[16:0]x,y,z;
 	output o;
 
-	wire signed[23:0]upper,lower;
+	wire signed[16:0]upper,lower;
 	assign signed upper = y+z;
 	assign signed lower = y-z;
 	wire result1,result2;
@@ -31,19 +31,12 @@ module range_comparator4(x,y,z,o);
 	comparator c1 (x,upper,result1);
 	comparator c2 (x,lower,result2);
 
-
 	assign o = (~result1 & result2);
-
-
-
-
-
-
 endmodule
 
 module comparator (
-    input wire signed [23:0] a,
-    input wire signed [23:0] b,
+    input wire signed [15:0] a,
+    input wire signed [15:0] b,
     output reg greater
     );
 

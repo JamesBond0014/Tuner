@@ -1,4 +1,4 @@
-module FreqCalc (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK, 
+module FreqCalc (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK,
 		        AUD_DACLRCK, AUD_ADCLRCK, AUD_BCLK, AUD_ADCDAT, AUD_DACDAT, SW, HEX0, HEX1, HEX2, HEX3, LEDR);
 
 	input CLOCK_50, CLOCK2_50;
@@ -14,7 +14,7 @@ module FreqCalc (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK
 	input AUD_DACLRCK, AUD_ADCLRCK, AUD_BCLK;
 	input AUD_ADCDAT;
 	output AUD_DACDAT;
-	
+
 	// Local wires.
 	wire read_ready, write_ready, read, write;
 	wire [23:0] readdata_left, readdata_right;
@@ -22,19 +22,19 @@ module FreqCalc (CLOCK_50, CLOCK2_50, KEY, FPGA_I2C_SCLK, FPGA_I2C_SDAT, AUD_XCK
 	wire reset = ~KEY[0];
 
 	/////////////////////////////////
-	// Your code goes here 
+	// Your code goes here
 	/////////////////////////////////
-	
+
 	// Call frequency calculator module
 	wire [15:0] frequency;
-	frequency_calculator(AUD_XCK, SW[0], readdata_left, reset, frequency, HEX0, HEX1, HEX2, HEX3, LEDR);
-	
-	
+	frequency_calculator(CLOCK_50, AUD_XCK, SW[0], readdata_left, reset, frequency, HEX0, HEX1, HEX2, HEX3, LEDR);
+
+
 /////////////////////////////////////////////////////////////////////////////////
-// Audio CODEC interface. 
+// Audio CODEC interface.
 //
 // The interface consists of the following wires:
-// read_ready, write_ready - CODEC ready for read/write operation 
+// read_ready, write_ready - CODEC ready for read/write operation
 // readdata_left, readdata_right - left and right channel data from the CODEC
 // read - send data from the CODEC (both channels)
 // writedata_left, writedata_right - left and right channel data to the CODEC
@@ -90,42 +90,43 @@ endmodule
 // Calculates the frequency of given sound input when enable is set to 1.
 // Runs for 1 sec.
 // To calculate new for new frequency (next 1 sec), flick reset on and off
-module frequency_calculator(clock_test, enable, soundwave, reset, frequency, HEX0, HEX1, HEX2, HEX3, LEDR);
-	input clock_test, enable, reset;
+module frequency_calculator(clk, audio_clock, enable, soundwave, reset, frequency) begin
 	input [23:0] soundwave;
 	output [15:0] frequency;
-	output [6:0] HEX0, HEX1, HEX2, HEX3;
-	output [0:0] LEDR;
-	
+	//output [6:0] HEX0, HEX1, HEX2, HEX3;
+	//output [0:0] LEDR;
+
 	// calculate frequency
 	wire [15:0] load = 16'd48000;
-	
+
 	wire [15:0] counter;
 	countdown timer(
+		.clk(clk),
+		.audio_clock(audio_clock),
 		.enable(enable),
 		.load(load),
 		.reset(reset),
-		.clock(clock_test),
 		.count_q(counter)
 	);
-	
+
 	// Enable and disable count_ticks (which counts frequency)
 	reg enable_count_ticks;
 	always @(*) begin
 		// Reset: perform before calculating frequency
 		if (reset)
 			enable_count_ticks = 1;
-		
+
 		// Set count_ticks' enable. Disable when counter reaches 0.
 		if (counter == 16'd0)
 			enable_count_ticks = 0;
 	end
 	// wire calculate = (counter != 16'd0);
-	
+
 	assign LEDR = enable_count_ticks;
-	
+
 	count_ticks ct(
-		.clock(clock_test),
+		.clk(clk),
+		.audio_clock(audio_clock),
 		.enable(enable_count_ticks),
 		.soundwave(soundwave),
 		.tick_count(frequency),
@@ -140,7 +141,7 @@ module frequency_calculator(clock_test, enable, soundwave, reset, frequency, HEX
 		display1 = frequency[7:4];
 		display2 = frequency[11:8];
 		display3 = frequency[15:12];
-	
+
 //		// COMMENT OUT: Countdown works
 //		// Test countdown, Display 2 when it reaches 0
 //		if (counter == 16'd0) begin
@@ -155,37 +156,36 @@ module frequency_calculator(clock_test, enable, soundwave, reset, frequency, HEX
 ////			display2 = 4'd0;
 ////			display3 = 4'd0;
 ////			end
-	
+
 	end
-	
+
 	// Display frequency to HEX
-	hex_decoder hex0(display0, HEX0);
-	hex_decoder hex1(display1, HEX1);
-	hex_decoder hex2(display2, HEX2);
-	hex_decoder hex3(display3, HEX3);
+	//hex_decoder hex0(display0, HEX0);
+	//hex_decoder hex1(display1, HEX1);
+	//hex_decoder hex2(display2, HEX2);
+	//hex_decoder hex3(display3, HEX3);
 
 endmodule
 
 
 // Count number of rising zero soundwave values
-module count_ticks(clock, enable, soundwave, tick_count, reset);
-	input clock;
-	input enable;
+module count_ticks(clk, audio_clock, enable, soundwave, tick_count, reset);
+	input clk, audio_clock, enable;
 	input [23:0] soundwave;
 	output reg [15:0] tick_count;
 	// posedge reset
 	input reset;
-	
+
 	// 1 -> negative, 0 -> positive
 	reg prev_soundwave_sign;
-	
-	always @(posedge clock)
+
+	always @(posedge clk)
 	begin
 		if (reset) begin // reset
 			prev_soundwave_sign <= 0;
 			tick_count = 16'd0; // 4369 equals hex 1111
 		end
-		else if (enable) begin // check if current soundwave is at/near 0
+		else if (enable && audio_clock) begin // check if current soundwave is at/near 0
 			// if at rising 0
 			if ((soundwave[23] == 0 || soundwave == 24'd0) && prev_soundwave_sign == 1) begin
 				tick_count <= tick_count + 16'd1;
@@ -198,16 +198,16 @@ module count_ticks(clock, enable, soundwave, tick_count, reset);
 endmodule
 
 
-module countdown(enable, load, reset, clock, count_q);
+module countdown(clk, audio_clock, enable, load, reset, count_q);
 	// reset is posedge
-	input enable, reset, clock;
+	input clock, audio_clock, enable, reset;
 	input [15:0] load;
 	output reg [15:0] count_q;
-	
-	always @(posedge clock) begin
+
+	always @(posedge clk) begin
 		if (reset) // reset counter
 			count_q <= load;
-		else if (enable) // counter when enable is on
+		else if (enable & audio_clock) // counter when enable is on
 			begin
 			if (count_q == 16'd0) // counter reached 0
 				count_q <= load;
@@ -215,14 +215,14 @@ module countdown(enable, load, reset, clock, count_q);
 				count_q <= count_q - 16'd1;
 			end
 	end
-	
+
 endmodule
 
 
 module hex_decoder(hex_digit, segments);
     input [3:0] hex_digit;
     output reg [6:0] segments;
-   
+
     always @(*)
         case (hex_digit)
             4'h0: segments = 7'b100_0000;
@@ -240,7 +240,7 @@ module hex_decoder(hex_digit, segments);
             4'hC: segments = 7'b100_0110;
             4'hD: segments = 7'b010_0001;
             4'hE: segments = 7'b000_0110;
-            4'hF: segments = 7'b000_1110;   
+            4'hF: segments = 7'b000_1110;
             default: segments = 7'h7f;
         endcase
 endmodule
